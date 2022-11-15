@@ -33,6 +33,11 @@ function getFileHandle() {
   return window.chooseFileSystemEntries();
 }
 
+
+function getFolderHandle() {
+  return window.showDirectoryPicker();
+}
+
 /**
  * Create a handle to a new (text) file on the local file system.
  *
@@ -42,6 +47,7 @@ function getNewFileHandle() {
   // For Chrome 86 and later...
   if ('showSaveFilePicker' in window) {
     const opts = {
+      suggestedName: 'zzxxyy.txt',
       types: [{
         description: 'Text file',
         accept: {'text/plain': ['.txt']},
@@ -52,6 +58,7 @@ function getNewFileHandle() {
   // For Chrome 85 and earlier...
   const opts = {
     type: 'save-file',
+    suggestedName: 'zzxxyy.txt',
     accepts: [{
       description: 'Text file',
       extensions: ['txt'],

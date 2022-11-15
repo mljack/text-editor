@@ -43,6 +43,29 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
+  // Open Folder
+  if ((e.ctrlKey === true || e.metaKey === true) && e.key === 'i') {
+    e.preventDefault();
+    app.openFolder();
+    return;
+  }
+
+  if ((e.ctrlKey === true || e.metaKey === true) && e.key === '1') {
+    e.preventDefault();
+    app.openFolderFile(0);
+    return;
+  }
+  if ((e.ctrlKey === true || e.metaKey === true) && e.key === '2') {
+    e.preventDefault();
+    app.openFolderFile(1);
+    return;
+  }
+  if ((e.ctrlKey === true || e.metaKey === true) && e.key === '3') {
+    e.preventDefault();
+    app.openFolderFile(2);
+    return;
+  }
+
   // Close
   if ((e.ctrlKey === true || e.metaKey === true) && e.key === 'n') {
     e.preventDefault();

@@ -41,27 +41,31 @@ const app = {
 // Verify the APIs we need are supported, show a polite warning if not.
 if (app.hasFSAccess) {
   document.getElementById('not-supported').classList.add('hidden');
-  gaEvent('File System APIs', 'FSAccess');
 } else {
   document.getElementById('lblLegacyFS').classList.toggle('hidden', false);
   document.getElementById('butSave').classList.toggle('hidden', true);
-  gaEvent('File System APIs', 'Legacy');
 }
 
 /**
  * Creates an empty notepad with no details in it.
  */
 app.newFile = () => {
-  if (!app.confirmDiscard()) {
-    return;
-  }
+
   app.setText();
   app.setFile();
-  app.setModified(false);
-  app.setFocus(true);
-  gaEvent('FileAction', 'New');
 };
 
+app.setFile = (fileHandle) => {
+  if (fileHandle && fileHandle.name) {
+    app.file.handle = fileHandle;
+    app.file.name = fileHandle.name;
+    document.title = `${fileHandle.name} - ${app.appName}`;
+  } else {
+    app.file.handle = null;
+    app.file.name = fileHandle;
+    document.title = app.appName;
+  }
+};
 
 /**
  * Opens a file for reading.
@@ -69,13 +73,8 @@ app.newFile = () => {
  * @param {FileSystemFileHandle} fileHandle File handle to read from.
  */
 app.openFile = async (fileHandle) => {
-  if (!app.confirmDiscard()) {
-    return;
-  }
-
   // If the File System Access API is not supported, use the legacy file apis.
   if (!app.hasFSAccess) {
-    gaEvent('FileAction', 'Open', 'Legacy');
     const file = await app.getFileLegacy();
     if (file) {
       app.readFile(file);
@@ -86,20 +85,17 @@ app.openFile = async (fileHandle) => {
   // If a fileHandle is provided, verify we have permission to read/write it,
   // otherwise, show the file open prompt and allow the user to select the file.
   if (fileHandle) {
-    gaEvent('FileAction', 'OpenRecent', 'FSAccess');
     if (await verifyPermission(fileHandle, true) === false) {
       console.error(`User did not grant permission to '${fileHandle.name}'`);
       return;
     }
   } else {
-    gaEvent('FileAction', 'Open', 'FSAccess');
     try {
       fileHandle = await getFileHandle();
     } catch (ex) {
       if (ex.name === 'AbortError') {
         return;
       }
-      gaEvent('Error', 'FileOpen', ex.name);
       const msg = 'An error occured trying to open the file.';
       console.error(msg, ex);
       alert(msg);
@@ -113,6 +109,63 @@ app.openFile = async (fileHandle) => {
   app.readFile(file, fileHandle);
 };
 
+
+app.files = []
+
+app.openFolder = async () => {
+    try {
+      var folderHandle = await getFolderHandle();
+    } catch (ex) {
+      if (ex.name === 'AbortError') {
+        return;
+      }
+      const msg = 'An error occured trying to open the file.';
+      console.error(msg, ex);
+      alert(msg);
+    }
+
+  if (!folderHandle)
+    return;
+
+  for await (const fileHandle of folderHandle.values()) {
+    console.log("------------------------\n")
+    console.log(fileHandle.kind, fileHandle.name);
+    if (fileHandle.kind !== 'file')
+      continue;
+    //var filePromise = fileHandle.getFile().then((file) => file.text());
+    //console.log(await filePromise);
+
+    //var file = await fileHandle.getFile();
+    //var fileHandle2 = fileHandle;
+    app.files.push(fileHandle)
+  }
+  //app.readFile(file, fileHandle2);
+};
+
+
+app.openFolderFile = async (idx) => {
+  try {
+    var fileHandle = app.files[idx];
+    var file = await fileHandle.getFile()
+    //console.info(await readFile(file))
+    app.readFile(file, fileHandle)
+  } catch (ex) {
+    const msg = `An error occured reading ${app.fileName}`;
+    console.error(msg, ex);
+    alert(msg);
+  }
+};
+
+app.printFile = async (file) => {
+  try {
+    console.info(await readFile(file))
+  } catch (ex) {
+    const msg = `An error occured reading ${app.fileName}`;
+    console.error(msg, ex);
+    alert(msg);
+  }
+};
+
 /**
  * Read the file from disk.
  *
@@ -123,10 +176,8 @@ app.readFile = async (file, fileHandle) => {
   try {
     app.setText(await readFile(file));
     app.setFile(fileHandle || file.name);
-    app.setModified(false);
-    app.setFocus(true);
+    //console.log(app.getText())
   } catch (ex) {
-    gaEvent('Error', 'FileRead', ex.name);
     const msg = `An error occured reading ${app.fileName}`;
     console.error(msg, ex);
     alert(msg);
@@ -141,16 +192,12 @@ app.saveFile = async () => {
     if (!app.file.handle) {
       return await app.saveFileAs();
     }
-    gaEvent('FileAction', 'Save');
     await writeFile(app.file.handle, app.getText());
-    app.setModified(false);
   } catch (ex) {
-    gaEvent('Error', 'FileSave', ex.name);
     const msg = 'Unable to save file';
     console.error(msg, ex);
     alert(msg);
   }
-  app.setFocus();
 };
 
 /**
@@ -158,12 +205,9 @@ app.saveFile = async () => {
  */
 app.saveFileAs = async () => {
   if (!app.hasFSAccess) {
-    gaEvent('FileAction', 'Save As', 'Legacy');
     app.saveAsLegacy(app.file.name, app.getText());
-    app.setFocus();
     return;
   }
-  gaEvent('FileAction', 'Save As', 'FSAccess');
   let fileHandle;
   try {
     fileHandle = await getNewFileHandle();
@@ -171,7 +215,6 @@ app.saveFileAs = async () => {
     if (ex.name === 'AbortError') {
       return;
     }
-    gaEvent('Error', 'FileSaveAs1', ex.name);
     const msg = 'An error occured trying to open the file.';
     console.error(msg, ex);
     alert(msg);
@@ -180,25 +223,18 @@ app.saveFileAs = async () => {
   try {
     await writeFile(fileHandle, app.getText());
     app.setFile(fileHandle);
-    app.setModified(false);
   } catch (ex) {
-    gaEvent('Error', 'FileSaveAs2', ex.name);
     const msg = 'Unable to save file.';
     console.error(msg, ex);
     alert(msg);
-    gaEvent('Error', 'Unable to write file', 'FSAccess');
     return;
   }
-  app.setFocus();
 };
 
 /**
  * Attempts to close the window
  */
 app.quitApp = () => {
-  if (!app.confirmDiscard()) {
-    return;
-  }
-  gaEvent('FileAction', 'Quit');
+
   window.close();
 };
